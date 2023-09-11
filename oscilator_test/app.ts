@@ -1,9 +1,10 @@
 ﻿window.onclick = () =>
 {
 	const audioContext = new AudioContext();
-	const baseNote = Note.Base.Transpose(3, 0);
+	const baseNote = Note.Base.Transpose(-5, 0);
 	const fmNote = baseNote.Transpose(0, 2);
 	const oscilator = audioContext.createOscillator();
+	const volume = audioContext.createGain();
 	let fmDepth = 300;
 
 	oscilator.frequency.setValueAtTime(baseNote.Frequency, audioContext.currentTime);
@@ -22,9 +23,22 @@
 		fm.push(fmWarp(t, fmDepth, fmNote.Frequency));
 	}
 
-	oscilator.frequency.setValueCurveAtTime(fm, audioContext.currentTime, duration)
+	oscilator.frequency.setValueCurveAtTime(fm, audioContext.currentTime, duration);
 
-	oscilator.connect(audioContext.destination);
+	const gain = [];
+	const gainDuration = 0.5;
+	const decreaseRate = 0.001;
+
+	for (let t = 0; t < gainDuration; t += 1 / audioContext.sampleRate)
+	{
+		gain.push((Math.pow(decreaseRate, t / gainDuration) - decreaseRate) * (1 + decreaseRate));
+	}
+
+	volume.gain.value
+	volume.gain.setValueCurveAtTime(gain, audioContext.currentTime, gainDuration);
+
+	oscilator.connect(volume);
+	volume.connect(audioContext.destination);
 	oscilator.start();
 }
 

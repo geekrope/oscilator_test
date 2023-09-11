@@ -1,8 +1,9 @@
 window.onclick = function () {
     var audioContext = new AudioContext();
-    var baseNote = Note.Base.Transpose(3, 0);
+    var baseNote = Note.Base.Transpose(-5, 0);
     var fmNote = baseNote.Transpose(0, 2);
     var oscilator = audioContext.createOscillator();
+    var volume = audioContext.createGain();
     var fmDepth = 300;
     oscilator.frequency.setValueAtTime(baseNote.Frequency, audioContext.currentTime);
     oscilator.type = "sine";
@@ -15,7 +16,16 @@ window.onclick = function () {
         fm.push(fmWarp(t, fmDepth, fmNote.Frequency));
     }
     oscilator.frequency.setValueCurveAtTime(fm, audioContext.currentTime, duration);
-    oscilator.connect(audioContext.destination);
+    var gain = [];
+    var gainDuration = 0.5;
+    var decreaseRate = 0.001;
+    for (var t = 0; t < gainDuration; t += 1 / audioContext.sampleRate) {
+        gain.push((Math.pow(decreaseRate, t / gainDuration) - decreaseRate) * (1 + decreaseRate));
+    }
+    volume.gain.value;
+    volume.gain.setValueCurveAtTime(gain, audioContext.currentTime, gainDuration);
+    oscilator.connect(volume);
+    volume.connect(audioContext.destination);
     oscilator.start();
 };
 var KeysScale;
