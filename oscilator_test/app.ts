@@ -1,11 +1,11 @@
 ﻿window.onclick = () =>
 {
 	const audioContext = new AudioContext();
-	const baseNote = Note.Base.Transpose(-5, 0);
+	const baseNote = Note.Base.Transpose((Math.random() - 0.5) * 12, -1);
 	const fmNote = baseNote.Transpose(0, 2);
 	const oscilator = audioContext.createOscillator();
 	const volume = audioContext.createGain();
-	let fmDepth = 300;
+	let fmDepth = 50;
 
 	oscilator.frequency.setValueAtTime(baseNote.Frequency, audioContext.currentTime);
 	oscilator.type = "sine";
@@ -16,26 +16,26 @@
 	}
 
 	const fm = [];
-	const duration = 10;
+	const duration = 0.3;
+
+	var release = new ExponentialCurve(new DOMPoint(0, 1), new DOMPoint(duration, 0));
 
 	for (let t = 0; t < duration; t += 1 / audioContext.sampleRate)
 	{
-		fm.push(fmWarp(t, fmDepth, fmNote.Frequency));
+		//fm.push(fmWarp(t, fmDepth, fmNote.Frequency)); //donk
+		fm.push(fmDepth * (duration - t) / duration + baseNote.Frequency); //kick
 	}
 
 	oscilator.frequency.setValueCurveAtTime(fm, audioContext.currentTime, duration);
 
 	const gain = [];
-	const gainDuration = 0.5;
-	const decreaseRate = 0.001;
 
-	for (let t = 0; t < gainDuration; t += 1 / audioContext.sampleRate)
+	for (let t = 0; release.IsInDomain(t); t += 1 / audioContext.sampleRate)
 	{
-		gain.push((Math.pow(decreaseRate, t / gainDuration) - decreaseRate) * (1 + decreaseRate));
+		gain.push(release.GetValue(t));
 	}
 
-	volume.gain.value
-	volume.gain.setValueCurveAtTime(gain, audioContext.currentTime, gainDuration);
+	volume.gain.setValueCurveAtTime(gain, audioContext.currentTime, duration);
 
 	oscilator.connect(volume);
 	volume.connect(audioContext.destination);
@@ -87,7 +87,9 @@ class Note
 		return this._frequency;
 	}
 
-	public Transpose(keys: number, octaves: number)
+	public Transpose(keys: number): Note;
+	public Transpose(keys: number, octaves: number): Note;
+	public Transpose(keys: number, octaves: number = 0): Note
 	{
 		const key = (keys + this.Key) % Settings.OctaveLength as KeysScale;
 		const octave = (octaves + this.Octave);
@@ -102,5 +104,134 @@ class Note
 		this._key = key;
 		this._octave = octave;
 		this._frequency = frequency;
+	}
+}
+
+interface Curve
+{
+	IsInDomain(t: number): boolean;
+	GetValue(t: number): number;
+}
+
+class LinearCurve implements Curve
+{
+	private _start: DOMPoint;
+	private _end: DOMPoint;
+
+	private _slope: number;
+	private _gain: number;
+
+	public get Start(): DOMPoint
+	{
+		return this._start;
+	}
+	public get End(): DOMPoint
+	{
+		return this._end;
+	}
+
+	public set Start(value: DOMPoint)
+	{
+		this._start = value;
+
+		this.Evaluate();
+	}
+	public set End(value: DOMPoint)
+	{
+		this._end = value;
+
+		this.Evaluate();
+	}
+
+	private Evaluate()
+	{
+		this._slope = (this._end.y - this._start.y) / (this._end.x - this._start.x);
+		this._gain = this._start.y - this._slope * this._start.x;
+	}
+
+	public IsInDomain(t: number)
+	{
+		return t >= this._start.x && t < this._end.x;
+	}
+	public GetValue(t: number)
+	{
+
+
+		return t * this._slope + this._gain;
+	}
+
+	public constructor(start: DOMPoint, end: DOMPoint)
+	{
+		this._start = start;
+		this._end = end;
+
+		this.Evaluate();
+	}
+}
+
+class ExponentialCurve implements Curve
+{
+	private _start: DOMPoint;
+	private _end: DOMPoint;
+
+	private _slope: number;
+
+	public get Start(): DOMPoint
+	{
+		return this._start;
+	}
+	public get End(): DOMPoint
+	{
+		return this._end;
+	}
+
+	public set Start(value: DOMPoint)
+	{
+		this._start = value;
+
+		this.Evaluate();
+	}
+	public set End(value: DOMPoint)
+	{
+		this._end = value;
+
+		this.Evaluate();
+	}
+
+	private Evaluate()
+	{
+		if (this._start.y < this._end.y)
+		{
+			this._slope = this._slope = Math.exp(Math.log(this._end.y - this._start.y + 1) / (this._end.x - this._start.x));
+		}
+		else
+		{
+			this._slope = Math.exp(Math.log(this._start.y - this._end.y + 1) / (this._start.x - this._end.x));
+		}
+
+	}
+
+	public IsInDomain(t: number)
+	{
+		return t >= this._start.x && t < this._end.x;
+	}
+	public GetValue(t: number)
+	{
+		if (this._start.y < this._end.y)
+		{
+			return Math.pow(this._slope, t - this._start.x) - 1 + this._start.y;
+		}
+		else
+		{
+			return Math.pow(this._slope, t - this._end.x) - 1 + this._end.y;
+		}
+	}
+
+	public constructor(start: DOMPoint, end: DOMPoint)
+	{
+		this._start = start;
+		this._end = end;
+
+		this.Evaluate();
 	}
 }
