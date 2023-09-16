@@ -1,10 +1,10 @@
 window.onclick = function () {
     var audioContext = new AudioContext();
-    var baseNote = Note.Base.Transpose((Math.random() - 0.5) * 12, -1);
+    var baseNote = Note.Base.Transpose((Math.random() - 0.5) * 12, 0);
     var fmNote = baseNote.Transpose(0, 2);
     var oscilator = audioContext.createOscillator();
     var volume = audioContext.createGain();
-    var fmDepth = 50;
+    var fmDepth = 200;
     oscilator.frequency.setValueAtTime(baseNote.Frequency, audioContext.currentTime);
     oscilator.type = "sine";
     function fmWarp(t, depth, frequency) {
@@ -14,8 +14,8 @@ window.onclick = function () {
     var duration = 0.3;
     var release = new ExponentialCurve(new DOMPoint(0, 1), new DOMPoint(duration, 0));
     for (var t = 0; t < duration; t += 1 / audioContext.sampleRate) {
-        //fm.push(fmWarp(t, fmDepth, fmNote.Frequency)); //donk
-        fm.push(fmDepth * (duration - t) / duration + baseNote.Frequency); //kick
+        fm.push(fmWarp(t, fmDepth, fmNote.Frequency)); //donk
+        //fm.push(fmDepth * (duration - t) / duration + baseNote.Frequency); //kick
     }
     oscilator.frequency.setValueCurveAtTime(fm, audioContext.currentTime, duration);
     var gain = [];
@@ -23,9 +23,41 @@ window.onclick = function () {
         gain.push(release.GetValue(t));
     }
     volume.gain.setValueCurveAtTime(gain, audioContext.currentTime, duration);
+    var analyser = audioContext.createAnalyser();
+    analyser.fftSize = 2048;
     oscilator.connect(volume);
-    volume.connect(audioContext.destination);
+    volume.connect(analyser);
+    analyser.connect(audioContext.destination);
     oscilator.start();
+    var cnvs = document.getElementById("cnvs");
+    var ctx = cnvs.getContext("2d");
+    var bufferLength = analyser.frequencyBinCount;
+    var dataArray = new Uint8Array(bufferLength);
+    function draw() {
+        requestAnimationFrame(draw);
+        analyser.getByteTimeDomainData(dataArray);
+        ctx.fillStyle = "rgb(255, 255, 255)";
+        ctx.fillRect(0, 0, 1920, 1080);
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = "rgb(0, 0, 0)";
+        ctx.beginPath();
+        var sliceWidth = (1920 * 1.0) / bufferLength;
+        var x = 0;
+        for (var i = 0; i < bufferLength; i++) {
+            var v = dataArray[i] / 128.0;
+            var y = (v * 1080) / 2;
+            if (i === 0) {
+                ctx.moveTo(x, y);
+            }
+            else {
+                ctx.lineTo(x, y);
+            }
+            x += sliceWidth;
+        }
+        ctx.lineTo(cnvs.width, cnvs.height / 2);
+        ctx.stroke();
+    }
+    draw();
 };
 var KeysScale;
 (function (KeysScale) {

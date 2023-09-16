@@ -1,11 +1,11 @@
 ﻿window.onclick = () =>
 {
 	const audioContext = new AudioContext();
-	const baseNote = Note.Base.Transpose((Math.random() - 0.5) * 12, -1);
+	const baseNote = Note.Base.Transpose((Math.random() - 0.5) * 12, 0);
 	const fmNote = baseNote.Transpose(0, 2);
 	const oscilator = audioContext.createOscillator();
 	const volume = audioContext.createGain();
-	let fmDepth = 50;
+	let fmDepth = 200;
 
 	oscilator.frequency.setValueAtTime(baseNote.Frequency, audioContext.currentTime);
 	oscilator.type = "sine";
@@ -22,8 +22,8 @@
 
 	for (let t = 0; t < duration; t += 1 / audioContext.sampleRate)
 	{
-		//fm.push(fmWarp(t, fmDepth, fmNote.Frequency)); //donk
-		fm.push(fmDepth * (duration - t) / duration + baseNote.Frequency); //kick
+		fm.push(fmWarp(t, fmDepth, fmNote.Frequency)); //donk
+		//fm.push(fmDepth * (duration - t) / duration + baseNote.Frequency); //kick
 	}
 
 	oscilator.frequency.setValueCurveAtTime(fm, audioContext.currentTime, duration);
@@ -37,9 +37,58 @@
 
 	volume.gain.setValueCurveAtTime(gain, audioContext.currentTime, duration);
 
+	const analyser = audioContext.createAnalyser();
+	analyser.fftSize = 2048;
+
 	oscilator.connect(volume);
-	volume.connect(audioContext.destination);
+	volume.connect(analyser);
+	analyser.connect(audioContext.destination);
 	oscilator.start();
+
+	var cnvs = <HTMLCanvasElement>document.getElementById("cnvs");
+	var ctx = cnvs.getContext("2d");
+
+	const bufferLength = analyser.frequencyBinCount;
+	const dataArray = new Uint8Array(bufferLength);	
+
+	function draw()
+	{
+		requestAnimationFrame(draw);
+
+		analyser.getByteTimeDomainData(dataArray);
+
+		ctx.fillStyle = "rgb(255, 255, 255)";
+		ctx.fillRect(0, 0, 1920, 1080);
+
+		ctx.lineWidth = 2;
+		ctx.strokeStyle = "rgb(0, 0, 0)";
+
+		ctx.beginPath();
+
+		const sliceWidth = (1920 * 1.0) / bufferLength;
+		let x = 0;
+
+		for (let i = 0; i < bufferLength; i++)
+		{
+			const v = dataArray[i] / 128.0;
+			const y = (v * 1080) / 2;
+
+			if (i === 0)
+			{
+				ctx.moveTo(x, y);
+			} else
+			{
+				ctx.lineTo(x, y);
+			}
+
+			x += sliceWidth;
+		}
+
+		ctx.lineTo(cnvs.width, cnvs.height / 2);
+		ctx.stroke();
+	}
+
+	draw();
 }
 
 enum KeysScale
