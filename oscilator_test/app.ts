@@ -18,19 +18,19 @@
 	const fm = [];
 	const duration = 0.3;
 
-	var release = new ExponentialCurve(new DOMPoint(0, 1), new DOMPoint(duration, 0));
+	var release = new ExponentialCurve(1, 0, duration);
 
 	for (let t = 0; t < duration; t += 1 / audioContext.sampleRate)
 	{
-		fm.push(fmWarp(t, fmDepth, fmNote.Frequency)); //donk
-		//fm.push(fmDepth * (duration - t) / duration + baseNote.Frequency); //kick
+		//fm.push(fmWarp(t, fmDepth, fmNote.Frequency)); //donk
+		fm.push(fmDepth * (duration - t) / duration + baseNote.Frequency); //kick
 	}
 
 	oscilator.frequency.setValueCurveAtTime(fm, audioContext.currentTime, duration);
 
 	const gain = [];
 
-	for (let t = 0; release.IsInDomain(t); t += 1 / audioContext.sampleRate)
+	for (let t = 0; t < release.Duration; t += 1 / audioContext.sampleRate)
 	{
 		gain.push(release.GetValue(t));
 	}
@@ -49,7 +49,7 @@
 	var ctx = cnvs.getContext("2d");
 
 	const bufferLength = analyser.frequencyBinCount;
-	const dataArray = new Uint8Array(bufferLength);	
+	const dataArray = new Uint8Array(bufferLength);
 
 	function draw()
 	{
@@ -158,61 +158,88 @@ class Note
 
 interface Curve
 {
-	IsInDomain(t: number): boolean;
+	get Duration(): number;
 	GetValue(t: number): number;
+}
+
+class Point
+{
+	public x: number;
+	public y: number;
+
+	public constructor(x: number, y: number)
+	{
+		this.x = x;
+		this.y = y;
+	}
 }
 
 class LinearCurve implements Curve
 {
-	private _start: DOMPoint;
-	private _end: DOMPoint;
+	private _startValue: number;
+	private _endValue: number;
+	private _duration: number;
 
 	private _slope: number;
 	private _gain: number;
 
-	public get Start(): DOMPoint
+	private get _startX(): number
 	{
-		return this._start;
+		return 0;
 	}
-	public get End(): DOMPoint
+	private get _endX(): number
 	{
-		return this._end;
+		return 1;
 	}
 
-	public set Start(value: DOMPoint)
+	public get Start(): number
 	{
-		this._start = value;
+		return this._startValue;
+	}
+	public get End(): number
+	{
+		return this._endValue;
+	}
+	public get Duration(): number
+	{
+		return this._duration;
+	}
+
+	public set Start(value: number)
+	{
+		this._startValue = value;
 
 		this.Evaluate();
 	}
-	public set End(value: DOMPoint)
+	public set End(value: number)
 	{
-		this._end = value;
+		this._endValue = value;
 
 		this.Evaluate();
+	}
+	public set Duration(value: number)
+	{
+		this._duration = value;
 	}
 
 	private Evaluate()
 	{
-		this._slope = (this._end.y - this._start.y) / (this._end.x - this._start.x);
-		this._gain = this._start.y - this._slope * this._start.x;
+		this._slope = (this._endValue - this._startValue) / (this._endX - this._startX);
+		this._gain = this._startValue - this._slope * this._startX;
 	}
 
-	public IsInDomain(t: number)
-	{
-		return t >= this._start.x && t < this._end.x;
-	}
 	public GetValue(t: number)
 	{
+		const actualT = t / this.Duration;
 
-
-		return t * this._slope + this._gain;
+		return actualT * this._slope + this._gain;
 	}
 
-	public constructor(start: DOMPoint, end: DOMPoint)
+	public constructor(startValue: number, endValue: number, duration: number)
 	{
-		this._start = start;
-		this._end = end;
+		this._startValue = startValue;
+		this._endValue = endValue;
+		this._duration = duration;
 
 		this.Evaluate();
 	}
@@ -220,67 +247,139 @@ class LinearCurve implements Curve
 
 class ExponentialCurve implements Curve
 {
-	private _start: DOMPoint;
-	private _end: DOMPoint;
+	private _startValue: number;
+	private _endValue: number;
+	private _duration: number;
 
 	private _slope: number;
 
-	public get Start(): DOMPoint
+	private get _startX(): number
 	{
-		return this._start;
+		return 0;
 	}
-	public get End(): DOMPoint
+	private get _endX(): number
 	{
-		return this._end;
+		return 1;
 	}
 
-	public set Start(value: DOMPoint)
+	public get Start(): number
 	{
-		this._start = value;
+		return this._startValue;
+	}
+	public get End(): number
+	{
+		return this._endValue;
+	}
+	public get Duration(): number
+	{
+		return this._duration;
+	}
+
+	public set Start(value: number)
+	{
+		this._startValue = value;
 
 		this.Evaluate();
 	}
-	public set End(value: DOMPoint)
+	public set End(value: number)
 	{
-		this._end = value;
+		this._endValue = value;
 
 		this.Evaluate();
+	}
+	public set Duration(value: number)
+	{
+		this._duration = value;
 	}
 
 	private Evaluate()
 	{
-		if (this._start.y < this._end.y)
+		if (this._startValue < this._endValue)
 		{
-			this._slope = this._slope = Math.exp(Math.log(this._end.y - this._start.y + 1) / (this._end.x - this._start.x));
+			this._slope = this._slope = Math.exp(Math.log(this._endValue - this._startValue + 1) / (this._endX - this._startX));
 		}
 		else
 		{
-			this._slope = Math.exp(Math.log(this._start.y - this._end.y + 1) / (this._start.x - this._end.x));
+			this._slope = Math.exp(Math.log(this._startValue - this._endValue + 1) / (this._startX - this._endX));
 		}
 
 	}
 
-	public IsInDomain(t: number)
-	{
-		return t >= this._start.x && t < this._end.x;
-	}
 	public GetValue(t: number)
 	{
-		if (this._start.y < this._end.y)
+		const actualT = t / this.Duration;
+
+		if (this._startValue < this._endValue)
 		{
-			return Math.pow(this._slope, t - this._start.x) - 1 + this._start.y;
+			return Math.pow(this._slope, actualT - this._startX) - 1 + this._startValue;
 		}
 		else
 		{
-			return Math.pow(this._slope, t - this._end.x) - 1 + this._end.y;
+			return Math.pow(this._slope, actualT - this._endX) - 1 + this._endValue;
 		}
 	}
 
-	public constructor(start: DOMPoint, end: DOMPoint)
+	public constructor(startValue: number, endValue: number, duration: number)
 	{
-		this._start = start;
-		this._end = end;
+		this._startValue = startValue;
+		this._endValue = endValue;
+		this._duration = duration;
 
 		this.Evaluate();
+	}
+}
+
+//class CurveComposition implements Curve
+//{
+
+//}
+
+class Modulation
+{
+	private _curve: Curve;
+	private _amount: number;
+	private _parent: Knob;
+
+	public get Amount(): number
+	{
+		return this._amount;
+	}
+	public set Amount(value: number)
+	{
+		this._amount = value;
+	}
+
+	public GetValue(t: number)
+	{
+		return this._curve.GetValue(t) * this._amount / 100 * this._parent.Scope;
+	}
+
+	public constructor(curve: Curve, amount: number, parent: Knob)
+	{
+		this._curve = curve;
+		this._amount = amount;
+		this._parent = parent;
+	}
+}
+
+class Knob
+{
+	private _origin: number;
+	private _min: number;
+	private _max: number;
+	private _modulations: Modulation[];
+
+	public get Scope()
+	{
+		return this._max - this._min;
+	}
+
+	public Modulate(curve: Curve, amount: number): Modulation
+	{
+		const modulation = new Modulation(curve, amount, this);
+
+		this._modulations.push(modulation);
+
+		return modulation;
 	}
 }
